@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1754" viewBox="0 0 1240 1754">
+  <rect width="1240" height="1754" fill="#ffffff"/>
+  <rect x="72" y="72" width="1096" height="1610" fill="#ffffff" stroke="#d7dde5" stroke-width="4"/>
+  <text x="100" y="145" font-family="Arial, sans-serif" font-size="36" font-weight="700" fill="#1d2733">2026 凯美瑞用户手册</text>
+  <text x="100" y="205" font-family="Arial, sans-serif" font-size="24" fill="#5b6675">保养维护 · 手册第 316 页</text>
+  <line x1="100" y1="250" x2="1140" y2="250" stroke="#b85c38" stroke-width="5"/>
+  <text x="100" y="330" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#1d2733">长途驾驶前检查</text>
+  <text x="100" y="395" font-family="Arial, sans-serif" font-size="24" fill="#334155">长途驾驶前建议检查轮胎、机油、冷却液、灯光、雨刮</text>
+  <text x="100" y="445" font-family="Arial, sans-serif" font-size="24" fill="#334155">和仪表警告灯状态。</text>
+  <text x="100" y="540" font-family="Arial, sans-serif" font-size="24" fill="#334155">如果车辆出现异常提示，应先排查并按手册要求处理，</text>
+  <text x="100" y="590" font-family="Arial, sans-serif" font-size="24" fill="#334155">必要时联系授权服务中心。</text>
+  <rect x="100" y="700" width="1040" height="360" rx="0" fill="#f5f7fa" stroke="#d7dde5"/>
+  <text x="140" y="775" font-family="Arial, sans-serif" font-size="22" fill="#5b6675">示例页图：上传真实 PDF 后，此处会展示从 PDF 渲染出的整页图片。</text>
+  <text x="100" y="1625" font-family="Arial, sans-serif" font-size="22" fill="#6b7280">316</text>
+</svg>

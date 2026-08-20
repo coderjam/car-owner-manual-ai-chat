@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <!--
+      当前机器安装的是 .NET 10 SDK，所以这里先使用 net10.0 保证本地可运行。
+      项目代码没有使用强依赖 .NET 10 的特性，后续安装 .NET 8 SDK 后可改为 net8.0。
+    -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="10.0.3" />
+  </ItemGroup>
+</Project>

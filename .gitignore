@@ -1,0 +1,15 @@
+.DS_Store
+.idea/
+tmp/
+node_modules/
+dist/
+bin/
+obj/
+__pycache__/
+.venv/
+.env
+*.pyc
+ai-service/data/index.json
+storage/manuals/*/original.pdf
+storage/manuals/*/pages/*.webp
+storage/manuals/*/pages/*.png

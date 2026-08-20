@@ -1,0 +1,23 @@
+{
+  "name": "car-owner-manual-ai-chat-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173"
+  },
+  "dependencies": {
+    "axios": "^1.11.0",
+    "element-plus": "^2.10.5",
+    "lucide-vue-next": "^0.468.0",
+    "vue": "^3.5.18"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.4",
+    "typescript": "^5.8.3",
+    "vite": "^5.4.19",
+    "vue-tsc": "^3.0.4"
+  }
+}

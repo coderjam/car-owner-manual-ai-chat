@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1754" viewBox="0 0 1240 1754">
+  <rect width="1240" height="1754" fill="#ffffff"/>
+  <rect x="72" y="72" width="1096" height="1610" fill="#ffffff" stroke="#d7dde5" stroke-width="4"/>
+  <text x="100" y="145" font-family="Arial, sans-serif" font-size="36" font-weight="700" fill="#1d2733">2026 凯美瑞用户手册</text>
+  <text x="100" y="205" font-family="Arial, sans-serif" font-size="24" fill="#5b6675">驾驶辅助系统 · 手册第 215 页</text>
+  <line x1="100" y1="250" x2="1140" y2="250" stroke="#1f6f5b" stroke-width="5"/>
+  <text x="100" y="330" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#1d2733">PDA 主动驾驶辅助</text>
+  <text x="100" y="395" font-family="Arial, sans-serif" font-size="24" fill="#334155">PDA 主动驾驶辅助用于在满足条件时辅助驾驶员识别风险，</text>
+  <text x="100" y="445" font-family="Arial, sans-serif" font-size="24" fill="#334155">并根据车辆状态提供辅助制动或转向支持。</text>
+  <text x="100" y="540" font-family="Arial, sans-serif" font-size="24" fill="#334155">开启方式和可用条件可能因车型配置不同略有差异，</text>
+  <text x="100" y="590" font-family="Arial, sans-serif" font-size="24" fill="#334155">请以车辆中控屏实际显示和官方手册说明为准。</text>
+  <rect x="100" y="700" width="1040" height="360" rx="0" fill="#f5f7fa" stroke="#d7dde5"/>
+  <text x="140" y="775" font-family="Arial, sans-serif" font-size="22" fill="#5b6675">示例页图：上传真实 PDF 后，此处会展示从 PDF 渲染出的整页图片。</text>
+  <text x="100" y="1625" font-family="Arial, sans-serif" font-size="22" fill="#6b7280">215</text>
+</svg>
