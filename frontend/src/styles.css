@@ -1206,6 +1206,27 @@ button:disabled {
   margin-left: 0;
 }
 
+.preview-page-input {
+  width: 58px;
+}
+
+.preview-page-input .el-input__wrapper {
+  padding: 1px 7px;
+  box-shadow: 0 0 0 1px var(--line-strong) inset;
+}
+
+.preview-page-input input {
+  text-align: center;
+}
+
+.preview-page-total {
+  min-width: 34px;
+  color: var(--muted);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
 .zoom-divider {
   width: 1px;
   height: 22px;
@@ -1447,6 +1468,39 @@ button:disabled {
   color: var(--teal-dark);
 }
 
+.manual-document-tools {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.manual-document-tools > i {
+  width: 1px;
+  height: 18px;
+  margin: 0 3px;
+  background: var(--line);
+}
+
+.manual-document-tools .el-button {
+  width: 28px;
+  height: 28px;
+  margin-left: 0;
+}
+
+.manual-zoom-value {
+  min-width: 43px;
+  padding: 0 3px;
+  color: var(--muted);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 10px;
+  background: transparent;
+  border: 0;
+}
+
+.manual-zoom-value:hover {
+  color: var(--teal-dark);
+}
+
 .manual-browser-preview {
   overflow: auto;
   padding: 24px;
@@ -1456,8 +1510,8 @@ button:disabled {
 
 .manual-browser-preview img {
   display: block;
-  width: min(100%, 790px);
   height: auto;
+  max-width: none;
   margin: 0 auto;
   background: white;
   box-shadow: 0 18px 52px rgba(24, 32, 37, 0.2);

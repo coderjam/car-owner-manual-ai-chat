@@ -129,7 +129,7 @@ api.MapGet("/vehicles/{vehicleId:long}/manual", async (
         : Results.Ok(new UserManualResponse(
             manual.Id,
             manual.FileName,
-            manual.PdfUrl,
+            manual.PdfUrl ?? string.Empty,
             manual.TotalPages));
 });
 

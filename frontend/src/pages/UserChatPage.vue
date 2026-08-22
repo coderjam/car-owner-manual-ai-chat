@@ -150,24 +150,24 @@
             <button
               type="button"
               :disabled="asking"
-              @click="submitPrompt('PDA 是什么？')"
+              @click="submitPrompt('保养应该怎么做？')"
             >
-              <CircleGauge :size="20" />
+              <Wrench :size="20" />
               <span>
-                <small>驾驶辅助</small>
-                PDA 是什么？
+                <small>日常保养</small>
+                保养应该怎么做？
               </span>
               <ArrowUpRight :size="17" />
             </button>
             <button
               type="button"
               :disabled="asking"
-              @click="submitPrompt('PDA 会提供哪些辅助？')"
+              @click="submitPrompt('PDA 是什么？')"
             >
-              <ShieldCheck :size="20" />
+              <CircleGauge :size="20" />
               <span>
-                <small>辅助能力</small>
-                PDA 会提供哪些辅助？
+                <small>驾驶辅助</small>
+                PDA 是什么？
               </span>
               <ArrowUpRight :size="17" />
             </button>
@@ -190,6 +190,7 @@
           <article
             v-for="message in messages"
             :key="message.id"
+            :id="`message-${message.id}`"
             class="chat-message"
             :class="[message.role, { pending: message.pending, error: message.error }]"
           >
@@ -362,6 +363,18 @@
             <strong>{{ previewTitle }}</strong>
           </div>
           <div class="zoom-controls">
+            <el-tooltip content="跳转 PDF 页" placement="bottom">
+              <el-input
+                v-model="previewPageInput"
+                class="preview-page-input"
+                size="small"
+                inputmode="numeric"
+                :maxlength="String(activeSource?.totalPages || 9999).length"
+                aria-label="跳转 PDF 页码"
+                @keyup.enter="jumpPreviewPage"
+              />
+              <span class="preview-page-total">/ {{ activeSource?.totalPages || '—' }}</span>
+            </el-tooltip>
             <el-tooltip content="上一页" placement="bottom">
               <el-button
                 circle
@@ -517,15 +530,28 @@
 
         <section class="manual-document">
           <div class="manual-document-meta">
-            <span>PDF 第 {{ manualBrowserPage }} 页</span>
-            <strong v-if="currentManualPage?.printedPageNumber">手册 P.{{ currentManualPage.printedPageNumber }}</strong>
-            <strong v-else>原页预览</strong>
+            <span>PDF 第 {{ manualBrowserPage }} / {{ manualTotalPages }} 页</span>
+            <div class="manual-document-tools">
+              <strong v-if="currentManualPage?.printedPageNumber">手册 P.{{ currentManualPage.printedPageNumber }}</strong>
+              <strong v-else>原页预览</strong>
+              <i />
+              <el-button circle aria-label="缩小手册页面" @click="manualBrowserZoomOut">
+                <ZoomOut :size="15" />
+              </el-button>
+              <button class="manual-zoom-value" type="button" @click="resetManualBrowserZoom">
+                {{ Math.round(manualBrowserScale * 100) }}%
+              </button>
+              <el-button circle aria-label="放大手册页面" @click="manualBrowserZoomIn">
+                <ZoomIn :size="15" />
+              </el-button>
+            </div>
           </div>
           <div class="manual-browser-preview">
             <img
               v-if="!manualBrowserImageError"
               :src="assetUrl(manualBrowserImageUrl)"
               :alt="`${currentManual.fileName} PDF 第 ${manualBrowserPage} 页`"
+              :style="{ width: `${manualBrowserScale * 100}%` }"
               @error="manualBrowserImageError = true"
             />
             <div v-else class="manual-browser-error">
@@ -577,6 +603,7 @@ import {
   SquarePen,
   UserRound,
   WifiOff,
+  Wrench,
   X,
   ZoomIn,
   ZoomOut
@@ -631,6 +658,7 @@ const activeSource = ref<KnowledgeReference | null>(null);
 const previewSources = ref<KnowledgeReference[]>([]);
 const activeSourceIndex = ref(0);
 const previewScale = ref(0.5);
+const previewPageInput = ref('');
 const copiedMessageId = ref<string | null>(null);
 const sourceImageErrors = ref<Record<string, boolean>>({});
 const currentManual = ref<UserManual | null>(null);
@@ -639,6 +667,7 @@ const manualBrowserVisible = ref(false);
 const manualBrowserPage = ref(1);
 const manualPageInput = ref('1');
 const manualBrowserImageError = ref(false);
+const manualBrowserScale = ref(0.65);
 
 const historyConversations = computed(() => {
   const seen = new Set<string>();
@@ -935,6 +964,7 @@ async function executeQuestion(messageId: string, text: string, conversationId: 
     if (selectedVehicleId.value === vehicleId) {
       await refreshHistory();
     }
+    await scrollToMessageStart(messageId);
   } catch {
     updatePendingMessage(
       messageId,
@@ -944,9 +974,9 @@ async function executeQuestion(messageId: string, text: string, conversationId: 
       text
     );
     ElMessage.error('问答服务暂时不可用');
+    await scrollToMessageStart(messageId);
   } finally {
     asking.value = false;
-    await scrollToBottom();
   }
 }
 
@@ -1035,6 +1065,7 @@ function previewSource(source: KnowledgeReference, sources: KnowledgeReference[]
   activeSource.value = source;
   previewSources.value = sources;
   activeSourceIndex.value = Math.max(0, sources.indexOf(source));
+  previewPageInput.value = String(source.pdfPageNumber);
   previewScale.value = 0.5;
   previewVisible.value = true;
 }
@@ -1046,6 +1077,7 @@ function showPreviousSource() {
 
   activeSourceIndex.value -= 1;
   activeSource.value = previewSources.value[activeSourceIndex.value];
+  previewPageInput.value = String(activeSource.value.pdfPageNumber);
 }
 
 function showPreviousManualPage() {
@@ -1063,6 +1095,7 @@ function showNextSource() {
 
   activeSourceIndex.value += 1;
   activeSource.value = previewSources.value[activeSourceIndex.value];
+  previewPageInput.value = String(activeSource.value.pdfPageNumber);
 }
 
 function showNextManualPage() {
@@ -1091,6 +1124,41 @@ function setActivePreviewPage(pageNumber: number) {
       `#page=${pageNumber}`
     )
   };
+  previewPageInput.value = String(pageNumber);
+}
+
+function jumpPreviewPage() {
+  if (!activeSource.value) {
+    return;
+  }
+
+  const pageNumber = Number.parseInt(previewPageInput.value, 10);
+  const totalPages = activeSource.value.totalPages || pageNumber;
+  if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > totalPages) {
+    ElMessage.warning(`请输入 1 到 ${totalPages} 之间的 PDF 页码`);
+    previewPageInput.value = String(activeSource.value.pdfPageNumber);
+    return;
+  }
+
+  setActivePreviewPage(pageNumber);
+}
+
+function manualBrowserZoomIn() {
+  manualBrowserScale.value = Math.min(
+    1.8,
+    Number((manualBrowserScale.value + 0.1).toFixed(1))
+  );
+}
+
+function manualBrowserZoomOut() {
+  manualBrowserScale.value = Math.max(
+    0.3,
+    Number((manualBrowserScale.value - 0.1).toFixed(1))
+  );
+}
+
+function resetManualBrowserZoom() {
+  manualBrowserScale.value = 0.65;
 }
 
 function openPdfSource(source: KnowledgeReference) {
@@ -1156,6 +1224,23 @@ async function scrollToBottom() {
   await nextTick();
   messageListRef.value?.scrollTo({
     top: messageListRef.value.scrollHeight,
+    behavior: 'smooth'
+  });
+}
+
+async function scrollToMessageStart(messageId: string) {
+  await nextTick();
+  const list = messageListRef.value;
+  const message = document.getElementById(`message-${messageId}`);
+  if (!list || !message) {
+    return;
+  }
+
+  const listRect = list.getBoundingClientRect();
+  const messageRect = message.getBoundingClientRect();
+  const targetTop = list.scrollTop + messageRect.top - listRect.top - 18;
+  list.scrollTo({
+    top: Math.max(0, targetTop),
     behavior: 'smooth'
   });
 }
