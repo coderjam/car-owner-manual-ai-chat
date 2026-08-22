@@ -4,6 +4,12 @@ public sealed record LoginRequest(string Username, string Password);
 
 public sealed record LoginResponse(long UserId, string Username, string Token);
 
+public sealed record UserManualResponse(
+    long Id,
+    string FileName,
+    string PdfUrl,
+    int TotalPages);
+
 public sealed record AdminLoginRequest(string Username, string Password);
 
 public sealed record AdminLoginResponse(string Username, string Token);

@@ -80,6 +80,19 @@ class RagEngineTests(unittest.TestCase):
     def test_search_returns_no_reference_when_nothing_matches(self) -> None:
         self.assertEqual(self.engine._search(1, "蓝牙设备如何改名"), [])
 
+    def test_missing_manual_evidence_uses_labeled_general_ai_answer(self) -> None:
+        self.engine._llm.generate_general_answer = Mock(
+            return_value="通常可以在车辆设置中查找相关选项。"
+        )
+
+        response = self.engine.answer(
+            ChatRequest(userId=1, vehicleId=1, question="如何设置手机蓝牙名称？")
+        )
+
+        self.assertEqual(response.references, [])
+        self.assertTrue(response.answer.startswith("【AI 通用回答，不来自当前车辆用户手册】"))
+        self.assertIn("通常可以", response.answer)
+
     def test_general_conversation_does_not_reuse_manual_references(self) -> None:
         response = self.engine.answer(
             ChatRequest(
@@ -150,6 +163,76 @@ class RagEngineTests(unittest.TestCase):
         matches = self.engine._search(1, "保养怎么做")
 
         self.assertEqual(matches[0]["pdfPageNumber"], 330)
+
+    def test_broad_maintenance_question_prefers_the_overview_page(self) -> None:
+        self.engine._items.extend(
+            [
+                {
+                    "manualId": 1,
+                    "vehicleId": 1,
+                    "documentName": "2026 凯美瑞用户手册.pdf",
+                    "chapter": "6-2. 保养",
+                    "pdfPageNumber": 353,
+                    "printedPageNumber": 353,
+                    "quote": (
+                        "保养须知。请按照保养计划的规定间隔进行定期保养，"
+                        "定期保养间隔根据里程表读数或时间间隔而定，以先达到者为准。"
+                    ),
+                    "pageImageUrl": "/manuals/1/pages/353.webp",
+                    "pdfPageUrl": "",
+                },
+                {
+                    "manualId": 1,
+                    "vehicleId": 1,
+                    "documentName": "2026 凯美瑞用户手册.pdf",
+                    "chapter": "6-3. 自行保养",
+                    "pdfPageNumber": 367,
+                    "printedPageNumber": 367,
+                    "quote": "加注发动机机油后，应重置发动机机油保养数据。",
+                    "pageImageUrl": "/manuals/1/pages/367.webp",
+                    "pdfPageUrl": "",
+                },
+            ]
+        )
+
+        matches = self.engine._search(1, "保养应该怎么做")
+
+        self.assertEqual(matches[0]["pdfPageNumber"], 353)
+
+    def test_overview_evidence_is_not_rejected_for_broad_maintenance(self) -> None:
+        self.engine._items.append(
+            {
+                "manualId": 1,
+                "vehicleId": 1,
+                "documentName": "2026 凯美瑞用户手册.pdf",
+                "chapter": "6-2. 保养",
+                "pdfPageNumber": 353,
+                "printedPageNumber": 353,
+                "quote": "保养须知。请按照保养计划的规定间隔进行定期保养。",
+                "pageImageUrl": "/manuals/1/pages/353.webp",
+                "pdfPageUrl": "",
+            }
+        )
+        self.engine._llm.assess_evidence = Mock(return_value=False)
+        self.engine._llm.generate_answer = Mock(return_value="请按照保养计划定期保养。")
+
+        response = self.engine.answer(
+            ChatRequest(userId=1, vehicleId=1, question="保养应该怎么做")
+        )
+
+        self.assertTrue(response.answer.startswith("【来自当前车辆用户手册】"))
+        self.assertIn("请按照保养计划定期保养。", response.answer)
+        self.assertEqual(response.references[0].pdfPageNumber, 353)
+
+    def test_specific_maintenance_question_can_still_be_rejected(self) -> None:
+        self.engine._llm.assess_evidence = Mock(return_value=False)
+
+        response = self.engine.answer(
+            ChatRequest(userId=1, vehicleId=1, question="机油保养应该怎么做")
+        )
+
+        self.assertEqual(response.references, [])
+        self.assertIn("没有找到足以回答", response.answer)
 
     def test_colloquial_maintenance_question_uses_the_same_intent(self) -> None:
         matches = self.engine._search(1, "车子平时怎么照顾")

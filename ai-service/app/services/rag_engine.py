@@ -9,6 +9,7 @@ from pathlib import Path
 from app.models import ChatRequest, ChatResponse, KnowledgeReference, ManualPage
 from app.services.embedding_retriever import EmbeddingRetriever
 from app.services.intent_classifier import AutomotiveIntentClassifier
+from app.services.local_faq_index import LocalFaqIndex
 from app.services.llm_client import LlmClient
 
 
@@ -27,7 +28,10 @@ class RagEngine:
         self._llm = LlmClient()
         self._intent_classifier = AutomotiveIntentClassifier()
         self._embedding = EmbeddingRetriever()
+        self._faq = LocalFaqIndex(self._index_path.parent / "local_faq.json")
         self._load()
+        if self._items:
+            self._faq.rebuild(self._items)
         self._embedding.fit(self._items)
 
     def answer(self, request: ChatRequest) -> ChatResponse:
@@ -43,7 +47,9 @@ class RagEngine:
                 createTime=self._now(),
             )
 
-        direct_matches = self._search(request.vehicleId, request.question)
+        direct_matches = self._search_local_faq(request.vehicleId, request.question)
+        if not direct_matches:
+            direct_matches = self._search(request.vehicleId, request.question)
         matches = direct_matches
 
         if not matches and request.recentHistory:
@@ -51,19 +57,23 @@ class RagEngine:
             matches = self._search(request.vehicleId, retrieval_question)
 
         if not matches:
-            return ChatResponse(
-                answer="该车型手册中暂未找到明确依据。请确认是否已上传并解析对应用户手册。",
-                references=[],
-                createTime=self._now(),
+            return self._general_ai_fallback(
+                request,
+                "当前车辆用户手册中没有找到与这个问题相关的明确内容。",
             )
 
         references = [self._to_reference(item) for item in matches[:3]]
         evidence_supported = self._llm.assess_evidence(request.question, references)
-        if evidence_supported is False:
-            return ChatResponse(
-                answer="当前导入的用户手册中没有找到足以回答这个问题的明确依据。",
-                references=[],
-                createTime=self._now(),
+        if (
+            evidence_supported is False
+            and not self._has_maintenance_overview_evidence(
+                request.question,
+                references,
+            )
+        ):
+            return self._general_ai_fallback(
+                request,
+                "当前车辆用户手册中没有找到足以回答这个问题的明确依据。",
             )
 
         llm_answer = self._llm.generate_answer(
@@ -79,7 +89,7 @@ class RagEngine:
                 request.vehicleId,
             )
             return ChatResponse(
-                answer=llm_answer,
+                answer=f"【来自当前车辆用户手册】\n{llm_answer}",
                 references=references,
                 createTime=self._now(),
             )
@@ -88,14 +98,14 @@ class RagEngine:
         display_page = first.printedPageNumber or first.pdfPageNumber
 
         answer = (
-            f"根据《{first.documentName}》{first.chapter}第 {display_page} 页，"
+            f"【来自当前车辆用户手册】\n根据《{first.documentName}》{first.chapter}第 {display_page} 页，"
             f"手册相关内容说明：{self._compact_quote(first.quote)} "
             "请以下方 PDF 整页图片中的手册原文为准。"
         )
 
         if not direct_matches:
             answer = (
-                f"结合前文定位到《{first.documentName}》{first.chapter}第 {display_page} 页，"
+                f"【来自当前车辆用户手册】\n结合前文定位到《{first.documentName}》{first.chapter}第 {display_page} 页，"
                 f"但当前手册片段没有明确说明“{request.question}”的具体条件。"
                 f"相关原文：{self._compact_quote(first.quote)}"
             )
@@ -103,6 +113,25 @@ class RagEngine:
         return ChatResponse(
             answer=answer,
             references=references,
+            createTime=self._now(),
+        )
+
+    def _general_ai_fallback(
+        self,
+        request: ChatRequest,
+        reason: str,
+    ) -> ChatResponse:
+        answer = self._llm.generate_general_answer(request.question)
+        if answer:
+            return ChatResponse(
+                answer=f"【AI 通用回答，不来自当前车辆用户手册】\n{answer}",
+                references=[],
+                createTime=self._now(),
+            )
+
+        return ChatResponse(
+            answer=f"{reason}\nAI 通用回答服务当前不可用，请稍后重试。",
+            references=[],
             createTime=self._now(),
         )
 
@@ -147,7 +176,26 @@ class RagEngine:
                 )
 
             self._save()
+            self._faq.rebuild(self._items)
             self._embedding.fit(self._items)
+
+    def _search_local_faq(self, vehicle_id: int, question: str) -> list[dict]:
+        """高频问法优先使用本地 FAQ 已训练出的手册页。"""
+        page_numbers = self._faq.find_source_pages(vehicle_id, question)
+        if not page_numbers:
+            return []
+
+        with self._lock:
+            by_page_number = {
+                item["pdfPageNumber"]: item
+                for item in self._items
+                if item["vehicleId"] == vehicle_id
+            }
+        return [
+            by_page_number[page_number]
+            for page_number in page_numbers
+            if page_number in by_page_number
+        ]
 
     def _search(self, vehicle_id: int, question: str) -> list[dict]:
         with self._lock:
@@ -229,6 +277,18 @@ class RagEngine:
         ):
             score += 64
 
+        # “保养应该怎么做”问的是整体方案，不应被某个恰好重复出现
+        # “保养”一词的具体操作页（例如加注机油）抢占首位。
+        # 优先返回保养须知、计划说明和项目表，后续再由回答引导用户
+        # 针对机油、轮胎等具体项目继续提问。
+        if self._is_broad_maintenance_question(question):
+            if "保养须知" in quote and "按照保养计划" in quote:
+                score += 320
+            elif "保养计划须知" in quote and "保养操作" in quote:
+                score += 280
+            elif "保养间隔" in quote and "发动机基本部件" in quote:
+                score += 260
+
         if (
             any(keyword in question for keyword in ["是什么", "含义", "作用", "介绍"])
             and "pda" in question.lower()
@@ -248,6 +308,42 @@ class RagEngine:
             score //= 4
 
         return score
+
+    def _is_broad_maintenance_question(self, question: str) -> bool:
+        intents = self._intent_classifier.classify(question)
+        has_maintenance_intent = any(
+            intent.name == "maintenance"
+            for intent in intents
+        )
+        if not has_maintenance_intent:
+            return False
+
+        specific_topics = (
+            "机油", "滤清器", "冷却液", "轮胎", "胎压", "制动", "刹车",
+            "蓄电池", "电池", "空调", "保险丝", "雨刷", "刮水器", "火花塞",
+            "变速器", "喷洗液", "车灯", "灯泡", "发动机舱", "洗车", "内饰",
+        )
+        return not any(topic in question for topic in specific_topics)
+
+    def _has_maintenance_overview_evidence(
+        self,
+        question: str,
+        references: list[KnowledgeReference],
+    ) -> bool:
+        """识别可回答宽泛保养问题的手册总览证据。
+
+        大模型证据审查有时会把“请给一个整体保养方案”理解成必须覆盖
+        每个零件的完整操作步骤。手册的保养须知和计划页已经足以回答
+        这类总览问题，因此只对明确命中总览页的情况进行本地兜底。
+        """
+        if not self._is_broad_maintenance_question(question):
+            return False
+
+        return any(
+            "保养须知" in reference.quote
+            and "按照保养计划" in reference.quote
+            for reference in references
+        )
 
     def _include_cited_pages(
         self,

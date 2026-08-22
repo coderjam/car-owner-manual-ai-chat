@@ -51,6 +51,26 @@ export interface Manual {
   createTime: string;
 }
 
+export interface UserManual {
+  id: number;
+  fileName: string;
+  pdfUrl: string;
+  totalPages: number;
+}
+
+export interface ManualManifestPage {
+  pdfPageNumber: number;
+  printedPageNumber?: number | null;
+  chapter: string;
+  pageText: string;
+  pageImageUrl: string;
+}
+
+export interface ManualManifest {
+  totalPages: number;
+  pages: ManualManifestPage[];
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';

@@ -120,6 +120,49 @@ class LlmClient:
             logger.warning("LLM request failed: %s", type(exception).__name__)
             return None
 
+    def generate_general_answer(self, question: str) -> str | None:
+        """在手册没有足够依据时，生成明确标注为 AI 的通用回答。"""
+        if not self.enabled:
+            return None
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "你是汽车相关的通用 AI 助手。当前没有检索到足够的本车型用户手册依据。"
+                    "请基于通用知识回答，但不要声称内容来自当前车辆用户手册，"
+                    "不要编造页码、章节或手册引用。对于安全、维修和驾驶问题，"
+                    "请提醒用户以车辆实际提示和官方手册为准。回答简洁直接。"
+                ),
+            },
+            {"role": "user", "content": question},
+        ]
+        payload = {
+            "model": self.model,
+            "temperature": 0.2,
+            "messages": messages,
+        }
+
+        if self.model.startswith("deepseek-"):
+            payload["thinking"] = {
+                "type": "enabled" if self.thinking == "enabled" else "disabled"
+            }
+
+        try:
+            response = httpx.post(
+                self._chat_completions_url(),
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json=payload,
+                timeout=self.timeout_seconds,
+            )
+            response.raise_for_status()
+            data = response.json()
+            content = data.get("choices", [{}])[0].get("message", {}).get("content")
+            return content.strip() if isinstance(content, str) and content.strip() else None
+        except Exception as exception:
+            logger.warning("General LLM request failed: %s", type(exception).__name__)
+            return None
+
     def assess_evidence(
         self,
         question: str,
@@ -141,6 +184,8 @@ class LlmClient:
                 "role": "system",
                 "content": (
                     "你是汽车用户手册证据审查器。判断提供的手册原文是否足以直接回答用户问题。"
+                    "如果用户询问宽泛的保养、功能或操作概览，而原文提供了对应的总览、计划或原则，"
+                    "应判定为 SUPPORTED；回答可以限定在原文覆盖的范围内，并引导用户继续询问具体项目。"
                     "只输出 SUPPORTED 或 UNSUPPORTED，不要输出其他内容。"
                 ),
             },

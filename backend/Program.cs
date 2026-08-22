@@ -108,6 +108,31 @@ api.MapGet("/vehicles", async (IAppStore store, CancellationToken cancellationTo
     return Results.Ok(await store.GetVehiclesAsync(cancellationToken));
 });
 
+api.MapGet("/vehicles/{vehicleId:long}/manual", async (
+    long vehicleId,
+    IAppStore store,
+    CancellationToken cancellationToken) =>
+{
+    var vehicle = await store.GetVehicleAsync(vehicleId, cancellationToken);
+    if (vehicle is null)
+    {
+        return Results.NotFound(new { message = "车型不存在" });
+    }
+
+    var manual = (await store.GetManualsAsync(cancellationToken))
+        .Where(item => item.VehicleId == vehicleId && item.Status == ManualStatus.Completed)
+        .OrderByDescending(item => item.CreateTime)
+        .FirstOrDefault();
+
+    return manual is null
+        ? Results.NotFound(new { message = "该车型暂未导入可浏览的用户手册" })
+        : Results.Ok(new UserManualResponse(
+            manual.Id,
+            manual.FileName,
+            manual.PdfUrl,
+            manual.TotalPages));
+});
+
 api.MapPost("/user-vehicles", async (
     CreateUserVehicleRequest request,
     IAppStore store,

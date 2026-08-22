@@ -10,6 +10,7 @@ __pycache__/
 .env
 *.pyc
 ai-service/data/index.json
+ai-service/data/local_faq.json
 storage/manuals/*/original.pdf
 storage/manuals/*/pages/*.webp
 storage/manuals/*/pages/*.png

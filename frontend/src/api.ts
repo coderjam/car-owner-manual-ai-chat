@@ -1,5 +1,12 @@
 import axios from 'axios';
-import type { ChatHistory, ChatResponse, Manual, Vehicle } from './types';
+import type {
+  ChatHistory,
+  ChatResponse,
+  Manual,
+  ManualManifest,
+  UserManual,
+  Vehicle
+} from './types';
 
 export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
@@ -43,6 +50,16 @@ export async function adminLogin(username: string, password: string) {
 export async function getVehicles() {
   const { data } = await http.get('/vehicles');
   return data as Vehicle[];
+}
+
+export async function getVehicleManual(vehicleId: number) {
+  const { data } = await http.get(`/vehicles/${vehicleId}/manual`);
+  return data as UserManual;
+}
+
+export async function getManualManifest(manualId: number) {
+  const { data } = await axios.get(assetUrl(`/manuals/${manualId}/manifest.json`));
+  return data as ManualManifest;
 }
 
 export async function askManual(

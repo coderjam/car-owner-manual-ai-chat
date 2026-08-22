@@ -102,15 +102,25 @@
           <h1>{{ currentVehicleTitle }}</h1>
           <p>{{ currentVehicleDetail }}</p>
         </div>
-        <div
-          class="header-status"
-          :class="{ disconnected: loadError }"
-          :title="headerStatusText"
-        >
-          <WifiOff v-if="loadError" :size="17" />
-          <LoaderCircle v-else-if="loadingData" :size="17" />
-          <BookCheck v-else :size="17" />
-          <span>{{ headerStatusText }}</span>
+        <div class="header-actions">
+          <el-button
+            class="manual-browser-button"
+            :disabled="!currentManual || loadingData"
+            @click="openManualBrowser"
+          >
+            <BookOpen :size="16" />
+            浏览手册
+          </el-button>
+          <div
+            class="header-status"
+            :class="{ disconnected: loadError }"
+            :title="headerStatusText"
+          >
+            <WifiOff v-if="loadError" :size="17" />
+            <LoaderCircle v-else-if="loadingData" :size="17" />
+            <BookCheck v-else :size="17" />
+            <span>{{ headerStatusText }}</span>
+          </div>
         </div>
       </header>
 
@@ -218,6 +228,11 @@
                 <LoaderCircle :size="17" />
                 <span>正在定位章节和页码</span>
               </div>
+              <div
+                v-else-if="message.role === 'assistant' && !message.error"
+                class="markdown-answer"
+                v-html="renderMarkdown(message.content)"
+              />
               <p v-else>{{ message.content }}</p>
 
               <button
@@ -437,6 +452,94 @@
         </div>
       </div>
     </el-dialog>
+
+    <el-dialog
+      v-model="manualBrowserVisible"
+      class="manual-browser-dialog"
+      width="min(1180px, 96vw)"
+      destroy-on-close
+    >
+      <template #header>
+        <div class="manual-browser-title">
+          <span>用户手册浏览</span>
+          <strong>{{ currentManual?.fileName }}</strong>
+        </div>
+      </template>
+      <div v-if="currentManual" class="manual-browser">
+        <aside class="manual-navigation">
+          <div class="manual-jump">
+            <label for="manual-page-input">跳转 PDF 页</label>
+            <div>
+              <el-input
+                id="manual-page-input"
+                v-model="manualPageInput"
+                inputmode="numeric"
+                :maxlength="String(manualTotalPages).length"
+                @keyup.enter="jumpToManualPage"
+              />
+              <el-button type="primary" @click="jumpToManualPage">前往</el-button>
+            </div>
+            <small>共 {{ manualTotalPages }} 页</small>
+          </div>
+
+          <div class="manual-page-actions">
+            <el-button :disabled="manualBrowserPage <= 1" @click="moveManualPage(-1)">
+              <ChevronLeft :size="16" />
+              上一页
+            </el-button>
+            <el-button
+              :disabled="manualBrowserPage >= manualTotalPages"
+              @click="moveManualPage(1)"
+            >
+              下一页
+              <ChevronRight :size="16" />
+            </el-button>
+          </div>
+
+          <section class="manual-directory">
+            <div class="manual-directory-heading">
+              <BookMarked :size="16" />
+              <strong>目录与索引</strong>
+            </div>
+            <p v-if="manualDirectoryPages.length === 0">当前手册未提供可识别目录，可直接跳转页码。</p>
+            <button
+              v-for="page in manualDirectoryPages"
+              :key="page.pdfPageNumber"
+              type="button"
+              :class="{ active: page.pdfPageNumber === manualBrowserPage }"
+              @click="setManualBrowserPage(page.pdfPageNumber)"
+            >
+              <span>{{ manualDirectoryLabel(page) }}</span>
+              <b>PDF {{ page.pdfPageNumber }}</b>
+            </button>
+          </section>
+        </aside>
+
+        <section class="manual-document">
+          <div class="manual-document-meta">
+            <span>PDF 第 {{ manualBrowserPage }} 页</span>
+            <strong v-if="currentManualPage?.printedPageNumber">手册 P.{{ currentManualPage.printedPageNumber }}</strong>
+            <strong v-else>原页预览</strong>
+          </div>
+          <div class="manual-browser-preview">
+            <img
+              v-if="!manualBrowserImageError"
+              :src="assetUrl(manualBrowserImageUrl)"
+              :alt="`${currentManual.fileName} PDF 第 ${manualBrowserPage} 页`"
+              @error="manualBrowserImageError = true"
+            />
+            <div v-else class="manual-browser-error">
+              <FileWarning :size="26" />
+              <strong>这一页的预览图片不可用</strong>
+              <el-button @click="openCurrentManualPdf">
+                <ExternalLink :size="15" />
+                在 PDF 中查看
+              </el-button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -447,6 +550,7 @@ import {
   ArrowUpRight,
   BookCheck,
   BookMarked,
+  BookOpen,
   BookOpenText,
   Bot,
   CarFront,
@@ -477,8 +581,24 @@ import {
   ZoomIn,
   ZoomOut
 } from 'lucide-vue-next';
-import { askManual, assetUrl, getHistory, getVehicles, login } from '../api';
-import type { ChatHistory, ChatMessage, KnowledgeReference, Vehicle } from '../types';
+import {
+  askManual,
+  assetUrl,
+  getHistory,
+  getManualManifest,
+  getVehicleManual,
+  getVehicles,
+  login
+} from '../api';
+import { renderMarkdown } from '../markdown';
+import type {
+  ChatHistory,
+  ChatMessage,
+  KnowledgeReference,
+  ManualManifestPage,
+  UserManual,
+  Vehicle
+} from '../types';
 
 const emit = defineEmits<{
   goAdmin: [];
@@ -513,6 +633,12 @@ const activeSourceIndex = ref(0);
 const previewScale = ref(0.5);
 const copiedMessageId = ref<string | null>(null);
 const sourceImageErrors = ref<Record<string, boolean>>({});
+const currentManual = ref<UserManual | null>(null);
+const manualManifestPages = ref<ManualManifestPage[]>([]);
+const manualBrowserVisible = ref(false);
+const manualBrowserPage = ref(1);
+const manualPageInput = ref('1');
+const manualBrowserImageError = ref(false);
 
 const historyConversations = computed(() => {
   const seen = new Set<string>();
@@ -580,6 +706,30 @@ const hasNextManualPage = computed(() => {
       activeSource.value.pdfPageNumber < activeSource.value.totalPages
   );
 });
+const manualTotalPages = computed(() => {
+  return currentManual.value?.totalPages || manualManifestPages.value.length || 1;
+});
+const currentManualPage = computed(() => {
+  return manualManifestPages.value.find(
+    (page) => page.pdfPageNumber === manualBrowserPage.value
+  );
+});
+const manualBrowserImageUrl = computed(() => {
+  return currentManualPage.value?.pageImageUrl
+    || `/manuals/${currentManual.value?.id}/pages/${manualBrowserPage.value}.webp`;
+});
+const manualDirectoryPages = computed(() => {
+  return manualManifestPages.value.filter((page) => {
+    const text = page.pageText || '';
+    const dotLinks = (text.match(/\.{3,}/g) || []).length;
+    return page.pdfPageNumber <= 60 && (
+      text.includes('图片索引')
+      || text.includes('字母索引')
+      || text.includes('目录')
+      || dotLinks >= 3
+    );
+  });
+});
 
 onMounted(() => {
   void initializeUser();
@@ -597,7 +747,7 @@ async function initializeUser() {
     if (!selectedVehicleId.value) {
       throw new Error('没有可用车型');
     }
-    await refreshHistory();
+    await Promise.all([refreshHistory(), loadCurrentManual()]);
   } catch {
     loadError.value = '车辆和手册数据加载失败';
     ElMessage.error('车辆和手册数据加载失败');
@@ -637,7 +787,88 @@ async function newChat() {
 
 async function handleVehicleChange() {
   await newChat();
-  await refreshHistory();
+  await Promise.all([refreshHistory(), loadCurrentManual()]);
+}
+
+async function loadCurrentManual() {
+  const vehicleId = selectedVehicleId.value;
+  currentManual.value = null;
+  manualManifestPages.value = [];
+
+  if (!vehicleId) {
+    return;
+  }
+
+  try {
+    const manual = await getVehicleManual(vehicleId);
+    if (selectedVehicleId.value !== vehicleId) {
+      return;
+    }
+
+    currentManual.value = manual;
+    const manifest = await getManualManifest(manual.id);
+    if (selectedVehicleId.value === vehicleId && currentManual.value?.id === manual.id) {
+      manualManifestPages.value = manifest.pages || [];
+    }
+  } catch {
+    // 浏览手册不可用不影响聊天主流程；按钮会保持禁用状态。
+  }
+}
+
+function openManualBrowser() {
+  if (!currentManual.value) {
+    ElMessage.warning('当前车型没有可浏览的已解析手册');
+    return;
+  }
+
+  const directoryStartPage = manualDirectoryPages.value[0]?.pdfPageNumber || 1;
+  setManualBrowserPage(directoryStartPage);
+  manualBrowserVisible.value = true;
+}
+
+function setManualBrowserPage(pageNumber: number) {
+  const validPage = Math.min(Math.max(Math.trunc(pageNumber), 1), manualTotalPages.value);
+  manualBrowserPage.value = validPage;
+  manualPageInput.value = String(validPage);
+  manualBrowserImageError.value = false;
+}
+
+function jumpToManualPage() {
+  const pageNumber = Number.parseInt(manualPageInput.value, 10);
+  if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > manualTotalPages.value) {
+    ElMessage.warning(`请输入 1 到 ${manualTotalPages.value} 之间的 PDF 页码`);
+    manualPageInput.value = String(manualBrowserPage.value);
+    return;
+  }
+
+  setManualBrowserPage(pageNumber);
+}
+
+function moveManualPage(offset: number) {
+  setManualBrowserPage(manualBrowserPage.value + offset);
+}
+
+function manualDirectoryLabel(page: ManualManifestPage): string {
+  const text = page.pageText || '';
+  if (text.includes('图片索引')) {
+    return '图片索引';
+  }
+  if (text.includes('字母索引')) {
+    return '字母索引';
+  }
+  return '目录';
+}
+
+function openCurrentManualPdf() {
+  if (!currentManual.value?.pdfUrl) {
+    return;
+  }
+
+  window.open(
+    assetUrl(`${currentManual.value.pdfUrl}#page=${manualBrowserPage.value}`),
+    '_blank',
+    'noopener,noreferrer'
+  );
 }
 
 async function refreshHistory(throwOnError = false) {

@@ -12,9 +12,11 @@
     "axios": "^1.11.0",
     "element-plus": "^2.10.5",
     "lucide-vue-next": "^0.468.0",
+    "markdown-it": "14.1.0",
     "vue": "^3.5.18"
   },
   "devDependencies": {
+    "@types/markdown-it": "^14.2.0",
     "@vitejs/plugin-vue": "^5.2.4",
     "typescript": "^5.8.3",
     "vite": "^5.4.19",
